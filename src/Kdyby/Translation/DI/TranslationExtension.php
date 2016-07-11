@@ -266,12 +266,22 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 		$registerToLatte = function (Nette\DI\ServiceDefinition $def) {
 			$def
 				->addSetup('?->onCompile[] = function($engine) { Kdyby\Translation\Latte\TranslateMacros::install($engine->getCompiler()); }', ['@self'])
-				->addSetup('addFilter', ['translate', [$this->prefix('@helpers'), 'translate']])
-				->addSetup('addFilter', ['getTranslator', [$this->prefix('@helpers'), 'getTranslator']]);
+				->addSetup('addFilter', ['translate', [$this->prefix('@helpers'), 'translate']]);
+
+			if (method_exists('Latte\Engine', 'addProvider')) { // Nette 2.4
+				$def->addSetup('addProvider', ['translator', '@Kdyby\Translation\Translator']);
+
+			} else {
+				$def->addSetup('addFilter', ['getTranslator', [$this->prefix('@helpers'), 'getTranslator']]);
+			}
 		};
 
-		$latteFactoryService = $builder->getByType('Nette\Bridges\ApplicationLatte\ILatteFactory') ?: 'nette.latteFactory';
-		if ($builder->hasDefinition($latteFactoryService)) {
+		$latteFactoryService = $builder->getByType('Nette\Bridges\ApplicationLatte\ILatteFactory');
+		if (!$latteFactoryService || !self::isOfType($builder->getDefinition($latteFactoryService)->getClass(), 'Latte\engine')) {
+			$latteFactoryService = 'nette.latteFactory';
+		}
+
+		if ($builder->hasDefinition($latteFactoryService) && self::isOfType($builder->getDefinition($latteFactoryService)->getClass(), 'Latte\Engine')) {
 			$registerToLatte($builder->getDefinition($latteFactoryService));
 		}
 
@@ -488,6 +498,18 @@ class TranslationExtension extends Nette\DI\CompilerExtension
 		$configurator->onCompile[] = function ($config, Nette\DI\Compiler $compiler) {
 			$compiler->addExtension('translation', new TranslationExtension());
 		};
+	}
+
+
+
+	/**
+	 * @param string $class
+	 * @param string $type
+	 * @return bool
+	 */
+	private static function isOfType($class, $type)
+	{
+		return $class === $type || is_subclass_of($class, $type);
 	}
 
 }
